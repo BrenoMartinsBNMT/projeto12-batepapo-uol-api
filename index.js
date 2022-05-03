@@ -19,7 +19,7 @@ app.post("/participants", (req, res) => {
   schema = schema.empty();
 
   let validate = schema.validate(req.body.name);
-  let name = req.body.name;
+  let { name } = req.body;
 
   if (validate.error || !req.body.name) {
     res.sendStatus(422);
@@ -33,15 +33,21 @@ app.post("/participants", (req, res) => {
         let validadeNameExist = schema.validate(element);
         if (validadeNameExist.value[0]) {
           res.sendStatus(409);
+          mongoVerifyExistName.close();
         } else {
           mongo.connect().then((saveNameInDB) => {
             let db = saveNameInDB.db("BatePapoUol");
             let collection = db.collection("usuários");
-            let promisse = collection.insertOne({ name: name });
+            let promisse = collection.insertOne({
+              name: name,
+              lastStatus: Date.now(),
+            });
 
             promisse.then(() => {
               res.sendStatus(201);
+              saveNameInDB.close();
             });
+            promisse.catch(() => res.sendStatus(404));
           });
         }
       });
@@ -49,4 +55,38 @@ app.post("/participants", (req, res) => {
   }
 });
 
+app.get("/participants", (req, res) => {
+  mongo.connect().then((mongoConnect) => {
+    let db = mongoConnect.db("BatePapoUol");
+    let collection = db.collection("usuários");
+    let promisse = collection.find({}).toArray();
+
+    promisse.then((element) => {
+      let sendUsers = [];
+      element.forEach((element) => {
+        sendUsers.push({ name: element.name });
+      });
+      res.send(sendUsers);
+    });
+  });
+});
+
+app.get("/messages", (req, res) => {
+  console.log(req.query.limit);
+  let limitMsg = parseInt(req.query.limit);
+
+  mongo.connect().then((mongoConnect) => {
+    let db = mongoConnect.db("BatePapoUol");
+    let collection = db.collection("mensagens");
+    let promisse = collection
+      .find({})
+      .sort({ idMenseger: -1 })
+      .limit(limitMsg)
+      .toArray();
+
+    promisse.then((element) => {
+      res.send(element);
+    });
+  });
+});
 app.listen(5000);
